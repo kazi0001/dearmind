@@ -327,6 +327,49 @@ export default function AdminCallsPage() {
         }
     }
 
+    async function deleteExistingCallNote(note: CallNote) {
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this call note? This cannot be undone."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setSaving(true);
+        setSuccessMessage("");
+        setErrorMessage("");
+
+        try {
+            const response = await fetch("/api/admin/call-notes", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    call_note_id: note.id,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || "Failed to delete call note.");
+            }
+
+            setSuccessMessage("Call note deleted successfully.");
+
+            if (selectedParentId) {
+                await loadCallNotes(selectedParentId);
+            }
+        } catch (error) {
+            console.error("DearMind delete call note error:", error);
+            setErrorMessage("Could not delete call note.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
@@ -733,6 +776,15 @@ export default function AdminCallsPage() {
                                                 className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                                             >
                                                 {note.reviewed ? "Reviewed" : "Mark reviewed"}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => deleteExistingCallNote(note)}
+                                                disabled={saving}
+                                                className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-medium text-red-700 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                Delete
                                             </button>
                                         </div>
                                     </article>

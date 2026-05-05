@@ -326,6 +326,49 @@ export default function AdminLettersPage() {
         }
     }
 
+    async function deleteLetter(letter: Letter) {
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this letter draft? This cannot be undone."
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setSavingLetter(true);
+        setSuccessMessage("");
+        setErrorMessage("");
+
+        try {
+            const response = await fetch("/api/admin/letters", {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    letter_id: letter.id,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || "Failed to delete letter.");
+            }
+
+            setSuccessMessage("Letter deleted successfully.");
+
+            if (selectedParentId) {
+                await loadLetters(selectedParentId);
+            }
+        } catch (error) {
+            console.error("DearMind delete letter error:", error);
+            setErrorMessage("Could not delete letter.");
+        } finally {
+            setSavingLetter(false);
+        }
+    }
+
     return (
         <main className="min-h-screen bg-[#fffaf5] px-6 py-10 text-slate-900">
             <div className="mx-auto max-w-6xl">
@@ -361,6 +404,13 @@ export default function AdminLettersPage() {
                             className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
                         >
                             Twilio calls
+                        </Link>
+
+                        <Link
+                            href="/admin/print-letter"
+                            className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
+                        >
+                            Print letter
                         </Link>
                     </div>
                 </div>
@@ -621,6 +671,14 @@ export default function AdminLettersPage() {
                                                             className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                                                         >
                                                             Mark mailed
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => deleteLetter(letter)}
+                                                            disabled={savingLetter}
+                                                            className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-medium text-red-700 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                                        >
+                                                            Delete
                                                         </button>
                                                     </div>
                                                 </>

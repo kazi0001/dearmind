@@ -212,3 +212,49 @@ export async function PATCH(request: Request) {
         );
     }
 }
+
+export async function DELETE(request: Request) {
+    try {
+        const authorized = await isAdminAuthorized();
+
+        if (!authorized) {
+            return Response.json(
+                { ok: false, error: "Unauthorized." },
+                { status: 401 }
+            );
+        }
+
+        const body = await request.json();
+
+        if (!body.call_note_id) {
+            return Response.json(
+                { ok: false, error: "call_note_id is required." },
+                { status: 400 }
+            );
+        }
+
+        const { error } = await supabaseAdmin
+            .from("call_notes")
+            .delete()
+            .eq("id", body.call_note_id);
+
+        if (error) {
+            return Response.json(
+                { ok: false, error: error.message },
+                { status: 500 }
+            );
+        }
+
+        return Response.json({
+            ok: true,
+            message: "Call note deleted successfully.",
+        });
+    } catch (error) {
+        console.error("DearMind call notes DELETE error:", error);
+
+        return Response.json(
+            { ok: false, error: "Unexpected server error while deleting call note." },
+            { status: 500 }
+        );
+    }
+}

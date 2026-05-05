@@ -396,3 +396,48 @@ export async function PATCH(request: Request) {
         );
     }
 }
+export async function DELETE(request: Request) {
+    try {
+        const authorized = await isAdminAuthorized();
+
+        if (!authorized) {
+            return Response.json(
+                { ok: false, error: "Unauthorized." },
+                { status: 401 }
+            );
+        }
+
+        const body = await request.json();
+
+        if (!body.letter_id) {
+            return Response.json(
+                { ok: false, error: "letter_id is required." },
+                { status: 400 }
+            );
+        }
+
+        const { error } = await supabaseAdmin
+            .from("letters")
+            .delete()
+            .eq("id", body.letter_id);
+
+        if (error) {
+            return Response.json(
+                { ok: false, error: error.message },
+                { status: 500 }
+            );
+        }
+
+        return Response.json({
+            ok: true,
+            message: "Letter deleted successfully.",
+        });
+    } catch (error) {
+        console.error("DearMind letters DELETE error:", error);
+
+        return Response.json(
+            { ok: false, error: "Unexpected server error while deleting letter." },
+            { status: 500 }
+        );
+    }
+}
