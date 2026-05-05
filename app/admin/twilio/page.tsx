@@ -84,11 +84,20 @@ export default function AdminTwilioPage() {
 
         setSelectedFamilyId(familyId);
         setSelectedParentId(firstParent?.id || "");
+        setSuccessMessage("");
+        setErrorMessage("");
     }
 
     async function startCall() {
         if (!selectedFamilyId || !selectedParentId || !selectedParent) {
             setErrorMessage("Please select a family and parent.");
+            return;
+        }
+
+        if (selectedParent.consent_status !== "consented") {
+            setErrorMessage(
+                "This parent has not consented yet. Update consent status to Consented before starting a DearMind call."
+            );
             return;
         }
 
@@ -119,21 +128,32 @@ export default function AdminTwilioPage() {
             const result = await response.json();
 
             if (!response.ok || !result.ok) {
-                throw new Error(result.error || "Failed to start Twilio call.");
+                throw new Error(
+                    result.error ||
+                    "Failed to start Twilio call. Check Twilio settings and phone number format."
+                );
             }
 
-            setSuccessMessage(`Call started successfully. Twilio SID: ${result.call_sid}`);
-        } catch (error) {
+            setSuccessMessage(
+                `Call started successfully. Twilio SID: ${result.call_sid}`
+            );
+        } catch (error: any) {
             console.error("DearMind start Twilio call error:", error);
-            setErrorMessage("Could not start Twilio call. Check Twilio settings and phone number format.");
+            setErrorMessage(
+                error?.message ||
+                "Could not start Twilio call. Check Twilio settings and phone number format."
+            );
         } finally {
             setCalling(false);
         }
     }
 
+    const consentStatus = selectedParent?.consent_status || "pending";
+    const canStartCall = consentStatus === "consented";
+
     return (
         <main className="min-h-screen bg-[#fffaf5] px-6 py-10 text-slate-900">
-            <div className="mx-auto max-w-4xl space-y-6">
+            <div className="mx-auto max-w-5xl space-y-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <Link href="/admin" className="text-sm text-slate-600 hover:text-slate-900">
@@ -145,7 +165,8 @@ export default function AdminTwilioPage() {
                         </h1>
 
                         <p className="mt-2 text-sm text-slate-600">
-                            Start a DearMind outbound memory call and save the recording callback.
+                            Start an automated DearMind guided memory call after parent consent
+                            has been confirmed.
                         </p>
                     </div>
 
@@ -156,22 +177,29 @@ export default function AdminTwilioPage() {
                         View call notes
                     </Link>
                 </div>
+
                 <AdminNav active="twilio" />
 
                 {errorMessage && (
-                    <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                         {errorMessage}
                     </div>
                 )}
 
                 {successMessage && (
-                    <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                    <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
                         {successMessage}
                     </div>
                 )}
 
-                <section className="mt-8 rounded-3xl bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-semibold">Start memory call</h2>
+                <section className="rounded-3xl bg-white p-6 shadow-sm">
+                    <h2 className="text-xl font-semibold">Start guided memory call</h2>
+
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                        DearMind will call the parent and ask three guided questions based on
+                        the selected weekly theme. The responses will be saved as call notes
+                        for review.
+                    </p>
 
                     {loadingFamilies ? (
                         <p className="mt-4 text-sm text-slate-600">Loading families...</p>
@@ -204,7 +232,11 @@ export default function AdminTwilioPage() {
                                 </span>
                                 <select
                                     value={selectedParentId}
-                                    onChange={(e) => setSelectedParentId(e.target.value)}
+                                    onChange={(e) => {
+                                        setSelectedParentId(e.target.value);
+                                        setSuccessMessage("");
+                                        setErrorMessage("");
+                                    }}
                                     className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
                                 >
                                     {selectedFamily?.parents?.map((parent) => (
@@ -217,19 +249,26 @@ export default function AdminTwilioPage() {
 
                             {selectedParent && (
                                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                                    <p>
-                                        <span className="font-medium text-slate-800">Consent:</span>{" "}
-                                        {selectedParent.consent_status || "pending"}
-                                    </p>
-                                    <p className="mt-1">
-                                        <span className="font-medium text-slate-800">Preferred time:</span>{" "}
+                                    <div className="flex flex-wrap gap-2">
+                                        <StatusBadge label={`Consent: ${formatText(consentStatus)}`} />
+                                        <StatusBadge label={`Phone: ${selectedParent.parent_phone}`} />
+                                    </div>
+
+                                    <p className="mt-3">
+                                        <span className="font-medium text-slate-800">
+                                            Preferred time:
+                                        </span>{" "}
                                         {selectedParent.preferred_call_day || "Not provided"},{" "}
                                         {selectedParent.preferred_call_time || "time not provided"}
                                     </p>
-                                    <p className="mt-1">
-                                        <span className="font-medium text-slate-800">Phone:</span>{" "}
-                                        {selectedParent.parent_phone}
-                                    </p>
+
+                                    {!canStartCall && (
+                                        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                                            Consent is required before starting a DearMind call. Go to
+                                            the admin dashboard and update this parent’s consent status
+                                            to Consented.
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
@@ -240,7 +279,11 @@ export default function AdminTwilioPage() {
                                     </span>
                                     <select
                                         value={callWeek}
-                                        onChange={(e) => setCallWeek(e.target.value)}
+                                        onChange={(e) => {
+                                            const week = e.target.value;
+                                            setCallWeek(week);
+                                            setCallTheme(getDefaultThemeForWeek(Number(week)));
+                                        }}
                                         className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
                                     >
                                         <option value="1">Week 1</option>
@@ -271,17 +314,34 @@ export default function AdminTwilioPage() {
                                 </label>
                             </div>
 
+                            <div className="rounded-2xl border border-slate-100 p-4">
+                                <p className="text-sm font-semibold text-slate-800">
+                                    Guided questions for this call
+                                </p>
+
+                                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                                    {getQuestionsForWeek(Number(callWeek)).map((question) => (
+                                        <li key={question}>• {question}</li>
+                                    ))}
+                                </ul>
+                            </div>
+
                             <button
                                 onClick={startCall}
-                                disabled={calling}
+                                disabled={calling || !canStartCall}
                                 className="w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {calling ? "Starting call..." : "Start Twilio call"}
+                                {calling
+                                    ? "Starting call..."
+                                    : !canStartCall
+                                        ? "Consent required before call"
+                                        : "Start Twilio call"}
                             </button>
 
                             <p className="text-xs leading-5 text-slate-500">
-                                For MVP testing, the parent should know in advance that DearMind
-                                will call and record their response for letter preparation.
+                                DearMind calls should only be started after the parent has
+                                consented. For trial testing, verify the recipient number in
+                                Twilio and make sure the parent expects the call.
                             </p>
                         </div>
                     )}
@@ -289,4 +349,66 @@ export default function AdminTwilioPage() {
             </div>
         </main>
     );
+}
+
+function StatusBadge({ label }: { label: string }) {
+    return (
+        <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+            {label}
+        </span>
+    );
+}
+
+function formatText(value: string) {
+    return value
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getDefaultThemeForWeek(callWeek: number) {
+    if (callWeek === 1) return "Present life and daily activities";
+    if (callWeek === 2) return "Family connection";
+    if (callWeek === 3) return "Life memory";
+    if (callWeek === 4) return "Monthly letter preparation";
+    return "Present life and daily activities";
+}
+
+function getQuestionsForWeek(callWeek: number) {
+    if (callWeek === 1) {
+        return [
+            "How has your week been so far? Please tell me about one small moment from this week that you would like remembered.",
+            "Did you cook, watch, read, visit, or do anything this week that made the day feel meaningful?",
+            "Was there anyone in the family you thought about, spoke with, or wished to hear from this week?",
+        ];
+    }
+
+    if (callWeek === 2) {
+        return [
+            "Who in your family has been on your mind recently, and what made you think of them?",
+            "Is there a family story, funny moment, or lesson you would like your children or grandchildren to remember?",
+            "Is there a message you would like to share with someone in the family this month?",
+        ];
+    }
+
+    if (callWeek === 3) {
+        return [
+            "Please tell me about a place from your younger days that still feels important to you.",
+            "What is one memory from childhood, school, work, marriage, or early family life that you would like preserved?",
+            "When you think back on that time, what feeling or lesson stands out most?",
+        ];
+    }
+
+    if (callWeek === 4) {
+        return [
+            "Thinking about this month, what would you most like your monthly letter to remember?",
+            "Is there a specific family memory, daily routine, recipe, place, or person that should be included in this month’s letter?",
+            "Is there anything you are looking forward to next month?",
+        ];
+    }
+
+    return [
+        "How has your week been so far? Please tell me about one small moment you would like remembered.",
+        "Is there a family memory or daily-life detail you would like preserved?",
+        "Is there anything you would like your family to know this month?",
+    ];
 }

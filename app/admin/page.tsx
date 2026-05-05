@@ -35,6 +35,10 @@ export default function AdminPage() {
     const [families, setFamilies] = useState<Family[]>([]);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState("");
+    const [updatingParentId, setUpdatingParentId] = useState("");
+    const [parentConsentDrafts, setParentConsentDrafts] = useState<
+        Record<string, string>
+    >({});
 
     async function loadFamilies() {
         setLoading(true);
@@ -54,6 +58,42 @@ export default function AdminPage() {
             setErrorMessage("Could not load submitted families.");
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function updateParentConsent(parentId: string, consentStatus: string) {
+        if (!parentId || !consentStatus) {
+            setErrorMessage("Missing parent or consent status.");
+            return;
+        }
+
+        setUpdatingParentId(parentId);
+        setErrorMessage("");
+
+        try {
+            const response = await fetch("/api/admin/parents", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    parent_id: parentId,
+                    consent_status: consentStatus,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || "Failed to update consent status.");
+            }
+
+            await loadFamilies();
+        } catch (error) {
+            console.error("DearMind consent update error:", error);
+            setErrorMessage("Could not update consent status.");
+        } finally {
+            setUpdatingParentId("");
         }
     }
 
@@ -105,22 +145,40 @@ export default function AdminPage() {
                     steps={[
                         {
                             title: "1. Intake",
-                            description: "Family submits buyer and parent details through the public intake form.",
+                            description:
+                                "Family submits buyer and parent details through the public intake form.",
                             status: families.length > 0 ? "done" : "current",
                         },
                         {
-                            title: "2. Call",
-                            description: "Start a guided Twilio call or add manual call notes.",
-                            status: families.length > 0 ? "current" : "next",
+                            title: "2. Consent",
+                            description:
+                                "Parent consent is reviewed before any regular DearMind calls begin.",
+                            status: families.some((family) =>
+                                family.parents?.some(
+                                    (parent) => parent.consent_status === "consented"
+                                )
+                            )
+                                ? "done"
+                                : families.length > 0
+                                    ? "current"
+                                    : "next",
                         },
                         {
-                            title: "3. Review",
-                            description: "Generate summaries, memory highlights, and mark call notes reviewed.",
-                            status: "next",
+                            title: "3. Call and review",
+                            description:
+                                "Start a guided call, summarize the call note, and mark it reviewed.",
+                            status: families.some((family) =>
+                                family.parents?.some(
+                                    (parent) => parent.consent_status === "consented"
+                                )
+                            )
+                                ? "current"
+                                : "next",
                         },
                         {
                             title: "4. Deliver",
-                            description: "Generate letter, print handwritten-style version, and send family summary.",
+                            description:
+                                "Generate letter, print handwritten-style version, and send family summary.",
                             status: "next",
                         },
                     ]}
@@ -141,12 +199,15 @@ export default function AdminPage() {
                     />
 
                     <MetricCard
-                        label="Pilot subscriptions"
-                        value={
-                            families.filter(
-                                (family) => family.subscription_status === "pilot"
-                            ).length
-                        }
+                        label="Consented parents"
+                        value={families.reduce(
+                            (count, family) =>
+                                count +
+                                (family.parents?.filter(
+                                    (parent) => parent.consent_status === "consented"
+                                ).length || 0),
+                            0
+                        )}
                     />
 
                     <MetricCard
@@ -249,6 +310,7 @@ export default function AdminPage() {
 
                                         <div className="flex flex-wrap gap-2">
                                             <StatusBadge label={family.subscription_status || "pilot"} />
+
                                             <StatusBadge
                                                 label={
                                                     parent?.consent_status
@@ -283,6 +345,64 @@ export default function AdminPage() {
                                                     )}`,
                                                 ]}
                                             />
+
+                                            <div className="rounded-2xl border border-slate-100 p-4 md:col-span-2">
+                                                <p className="text-sm font-semibold text-slate-800">
+                                                    Consent workflow
+                                                </p>
+
+                                                <p className="mt-2 text-sm leading-6 text-slate-600">
+                                                    Regular DearMind calls should only begin after the
+                                                    parent has clearly consented.
+                                                </p>
+
+                                                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                                                    <select
+                                                        value={
+                                                            parentConsentDrafts[parent.id] ||
+                                                            parent.consent_status ||
+                                                            "pending"
+                                                        }
+                                                        onChange={(e) =>
+                                                            setParentConsentDrafts((current) => ({
+                                                                ...current,
+                                                                [parent.id]: e.target.value,
+                                                            }))
+                                                        }
+                                                        className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
+                                                    >
+                                                        <option value="pending">Pending</option>
+                                                        <option value="consented">Consented</option>
+                                                        <option value="declined">Declined</option>
+                                                        <option value="paused">Paused</option>
+                                                    </select>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            updateParentConsent(
+                                                                parent.id,
+                                                                parentConsentDrafts[parent.id] ||
+                                                                parent.consent_status ||
+                                                                "pending"
+                                                            )
+                                                        }
+                                                        disabled={updatingParentId === parent.id}
+                                                        className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    >
+                                                        {updatingParentId === parent.id
+                                                            ? "Saving..."
+                                                            : "Save consent status"}
+                                                    </button>
+                                                </div>
+
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    <StatusBadge
+                                                        label={`Current consent: ${formatText(
+                                                            parent.consent_status || "pending"
+                                                        )}`}
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     ) : (
                                         <p className="mt-5 text-sm text-red-600">
