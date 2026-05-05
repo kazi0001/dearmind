@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import AdminNav from "@/components/AdminNav";
 
 type Parent = {
     id: string;
@@ -216,7 +217,7 @@ export default function PrintLetterPage() {
         }
       `}</style>
 
-            <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-6xl space-y-6">
                 <div className="no-print flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <Link
@@ -253,7 +254,9 @@ export default function PrintLetterPage() {
                         </button>
                     </div>
                 </div>
-
+                <div className="no-print">
+                    <AdminNav active="print" />
+                </div>
                 {errorMessage && (
                     <div className="no-print mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                         {errorMessage}

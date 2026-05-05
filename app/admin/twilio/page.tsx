@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import AdminNav from "@/components/AdminNav";
 
 type Parent = {
     id: string;
@@ -132,7 +133,7 @@ export default function AdminTwilioPage() {
 
     return (
         <main className="min-h-screen bg-[#fffaf5] px-6 py-10 text-slate-900">
-            <div className="mx-auto max-w-4xl">
+            <div className="mx-auto max-w-4xl space-y-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <Link href="/admin" className="text-sm text-slate-600 hover:text-slate-900">
@@ -155,6 +156,7 @@ export default function AdminTwilioPage() {
                         View call notes
                     </Link>
                 </div>
+                <AdminNav active="twilio" />
 
                 {errorMessage && (
                     <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">

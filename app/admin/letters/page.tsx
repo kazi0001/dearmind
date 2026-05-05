@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import AdminNav from "@/components/AdminNav";
 
 type Parent = {
     id: string;
@@ -462,7 +463,7 @@ export default function AdminLettersPage() {
 
     return (
         <main className="min-h-screen bg-[#fffaf5] px-6 py-10 text-slate-900">
-            <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-6xl space-y-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                         <Link
@@ -505,7 +506,7 @@ export default function AdminLettersPage() {
                         </Link>
                     </div>
                 </div>
-
+                <AdminNav active="letters" />
                 {errorMessage && (
                     <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                         {errorMessage}
