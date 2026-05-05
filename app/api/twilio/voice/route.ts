@@ -72,10 +72,7 @@ export async function POST(request: Request) {
         language: "en-US",
     });
 
-    gather.say(
-        { voice: "alice", language: "en-US" },
-        firstQuestion
-    );
+    gather.say({ voice: "alice", language: "en-US" }, firstQuestion);
 
     twiml.say(
         { voice: "alice", language: "en-US" },
@@ -83,6 +80,10 @@ export async function POST(request: Request) {
     );
 
     return xmlResponse(twiml);
+}
+
+export async function GET(request: Request) {
+    return POST(request);
 }
 
 function buildGuidedResponseUrl({
