@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const { data: session, error: sessionError } = await supabaseAdmin
         .from("voice_call_sessions")
-        .select("id, family_id, parent_id, call_week, call_theme")
+        .select("id, family_id, parent_id, schedule_id, call_week, call_theme")
         .eq("id", sessionId)
         .single();
 
@@ -75,10 +75,7 @@ export async function POST(request: Request) {
             language: "en-US",
         });
 
-        gather.say(
-            { voice: "alice", language: "en-US" },
-            nextQuestion
-        );
+        gather.say({ voice: "alice", language: "en-US" }, nextQuestion);
 
         twiml.say(
             { voice: "alice", language: "en-US" },
@@ -92,6 +89,7 @@ export async function POST(request: Request) {
         sessionId,
         familyId: session.family_id,
         parentId: session.parent_id,
+        scheduleId: session.schedule_id || null,
         callWeek: session.call_week || 1,
         callTheme: session.call_theme || "Automated guided memory call",
     });
@@ -108,12 +106,14 @@ async function finalizeCallSession({
     sessionId,
     familyId,
     parentId,
+    scheduleId,
     callWeek,
     callTheme,
 }: {
     sessionId: string;
     familyId: string;
     parentId: string;
+    scheduleId: string | null;
     callWeek: number;
     callTheme: string;
 }) {
@@ -138,12 +138,15 @@ async function finalizeCallSession({
         .join("\n\n");
 
     const rawNotes = [
-        `Automated DearMind guided call completed.`,
+        "Automated DearMind guided call completed.",
         `Voice session ID: ${sessionId}`,
+        scheduleId ? `Schedule ID: ${scheduleId}` : "",
         `Call theme: ${callTheme}`,
         "",
         transcript,
-    ].join("\n");
+    ]
+        .filter(Boolean)
+        .join("\n");
 
     await supabaseAdmin.from("call_notes").insert({
         family_id: familyId,
@@ -165,6 +168,16 @@ async function finalizeCallSession({
             completed_at: new Date().toISOString(),
         })
         .eq("id", sessionId);
+
+    if (scheduleId) {
+        await supabaseAdmin
+            .from("call_schedule")
+            .update({
+                status: "completed",
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", scheduleId);
+    }
 }
 
 function buildGuidedResponseUrl({
@@ -233,4 +246,8 @@ function xmlResponse(twiml: any) {
             "Content-Type": "text/xml",
         },
     });
+}
+
+export async function GET(request: Request) {
+    return POST(request);
 }

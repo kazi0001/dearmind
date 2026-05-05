@@ -55,6 +55,7 @@ export async function POST(request: Request) {
             .insert({
                 family_id: body.family_id,
                 parent_id: body.parent_id,
+                schedule_id: body.schedule_id || null,
                 call_week: callWeek,
                 call_theme: callTheme,
                 status: "started",
