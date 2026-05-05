@@ -29,9 +29,47 @@ type Letter = {
     created_at: string;
 };
 
+type MonthlyCallNote = {
+    id: string;
+    family_id: string;
+    parent_id: string;
+    call_date: string;
+    call_week: number | null;
+    call_theme: string | null;
+    raw_notes: string | null;
+    ai_summary: string | null;
+    memory_highlights: string | null;
+    sensitive_flag: boolean;
+    reviewed: boolean;
+    created_at: string;
+};
+
+type MonthlyCallNoteStats = {
+    total: number;
+    reviewed: number;
+    not_reviewed: number;
+    summarized: number;
+    unsummarized: number;
+    sensitive: number;
+    with_memory_highlights: number;
+};
+
 export default function AdminLettersPage() {
     const [families, setFamilies] = useState<Family[]>([]);
     const [letters, setLetters] = useState<Letter[]>([]);
+    const [monthlyCallNotes, setMonthlyCallNotes] = useState<MonthlyCallNote[]>(
+        []
+    );
+    const [monthlyStats, setMonthlyStats] = useState<MonthlyCallNoteStats>({
+        total: 0,
+        reviewed: 0,
+        not_reviewed: 0,
+        summarized: 0,
+        unsummarized: 0,
+        sensitive: 0,
+        with_memory_highlights: 0,
+    });
+
     const [selectedFamilyId, setSelectedFamilyId] = useState("");
     const [selectedParentId, setSelectedParentId] = useState("");
     const [letterMonth, setLetterMonth] = useState(
@@ -46,6 +84,7 @@ export default function AdminLettersPage() {
 
     const [loadingFamilies, setLoadingFamilies] = useState(true);
     const [loadingLetters, setLoadingLetters] = useState(false);
+    const [loadingMonthlyNotes, setLoadingMonthlyNotes] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [savingLetter, setSavingLetter] = useState(false);
     const [successMessage, setSuccessMessage] = useState("");
@@ -114,6 +153,45 @@ export default function AdminLettersPage() {
         }
     }
 
+    async function loadMonthlyCallNotes(parentId: string, month: string) {
+        if (!parentId || !month) {
+            setMonthlyCallNotes([]);
+            return;
+        }
+
+        setLoadingMonthlyNotes(true);
+        setErrorMessage("");
+
+        try {
+            const response = await fetch(
+                `/api/admin/monthly-call-notes?parent_id=${parentId}&month=${month}`
+            );
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || "Failed to load monthly call notes.");
+            }
+
+            setMonthlyCallNotes(result.call_notes || []);
+            setMonthlyStats(
+                result.stats || {
+                    total: 0,
+                    reviewed: 0,
+                    not_reviewed: 0,
+                    summarized: 0,
+                    unsummarized: 0,
+                    sensitive: 0,
+                    with_memory_highlights: 0,
+                }
+            );
+        } catch (error) {
+            console.error("DearMind monthly call notes load error:", error);
+            setErrorMessage("Could not load monthly call notes.");
+        } finally {
+            setLoadingMonthlyNotes(false);
+        }
+    }
+
     useEffect(() => {
         loadFamilies();
     }, []);
@@ -121,8 +199,9 @@ export default function AdminLettersPage() {
     useEffect(() => {
         if (selectedParentId) {
             loadLetters(selectedParentId);
+            loadMonthlyCallNotes(selectedParentId, letterMonth);
         }
-    }, [selectedParentId]);
+    }, [selectedParentId, letterMonth]);
 
     function handleFamilyChange(e: React.ChangeEvent<HTMLSelectElement>) {
         const familyId = e.target.value;
@@ -170,6 +249,7 @@ export default function AdminLettersPage() {
             );
 
             await loadLetters(selectedParentId);
+            await loadMonthlyCallNotes(selectedParentId, letterMonth);
         } catch (error) {
             console.error("DearMind generate letter error:", error);
             setErrorMessage("Could not generate letter draft.");
@@ -428,91 +508,254 @@ export default function AdminLettersPage() {
                 )}
 
                 <div className="mt-8 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-                    <section className="rounded-3xl bg-white p-6 shadow-sm">
-                        <h2 className="text-xl font-semibold">Generate letter</h2>
+                    <section className="space-y-6">
+                        <div className="rounded-3xl bg-white p-6 shadow-sm">
+                            <h2 className="text-xl font-semibold">Generate letter</h2>
 
-                        {loadingFamilies ? (
-                            <p className="mt-4 text-sm text-slate-600">Loading families...</p>
-                        ) : families.length === 0 ? (
-                            <p className="mt-4 text-sm text-slate-600">
-                                No families available yet.
-                            </p>
-                        ) : (
-                            <div className="mt-6 space-y-5">
-                                <label className="block">
-                                    <span className="text-sm font-medium text-slate-700">
-                                        Family
-                                    </span>
+                            {loadingFamilies ? (
+                                <p className="mt-4 text-sm text-slate-600">
+                                    Loading families...
+                                </p>
+                            ) : families.length === 0 ? (
+                                <p className="mt-4 text-sm text-slate-600">
+                                    No families available yet.
+                                </p>
+                            ) : (
+                                <div className="mt-6 space-y-5">
+                                    <label className="block">
+                                        <span className="text-sm font-medium text-slate-700">
+                                            Family
+                                        </span>
 
-                                    <select
-                                        value={selectedFamilyId}
-                                        onChange={handleFamilyChange}
-                                        className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
+                                        <select
+                                            value={selectedFamilyId}
+                                            onChange={handleFamilyChange}
+                                            className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
+                                        >
+                                            {families.map((family) => (
+                                                <option key={family.id} value={family.id}>
+                                                    {family.buyer_name} ({family.buyer_email})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+
+                                    <label className="block">
+                                        <span className="text-sm font-medium text-slate-700">
+                                            Parent
+                                        </span>
+
+                                        <select
+                                            value={selectedParentId}
+                                            onChange={(e) => {
+                                                setSelectedParentId(e.target.value);
+                                                setGeneratedDraft("");
+                                                setEditingLetterId("");
+                                            }}
+                                            className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
+                                        >
+                                            {selectedFamily?.parents?.map((parent) => (
+                                                <option key={parent.id} value={parent.id}>
+                                                    {parent.parent_name} ({parent.parent_phone})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+
+                                    <label className="block">
+                                        <span className="text-sm font-medium text-slate-700">
+                                            Letter month
+                                        </span>
+
+                                        <input
+                                            type="month"
+                                            value={letterMonth}
+                                            onChange={(e) => {
+                                                setLetterMonth(e.target.value);
+                                                setGeneratedDraft("");
+                                            }}
+                                            className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
+                                        />
+                                    </label>
+
+                                    <button
+                                        onClick={handleGenerateLetter}
+                                        disabled={generating}
+                                        className="w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        {families.map((family) => (
-                                            <option key={family.id} value={family.id}>
-                                                {family.buyer_name} ({family.buyer_email})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
+                                        {generating ? "Generating..." : "Generate monthly letter"}
+                                    </button>
 
-                                <label className="block">
-                                    <span className="text-sm font-medium text-slate-700">
-                                        Parent
-                                    </span>
+                                    {generatedDraft && (
+                                        <div className="rounded-2xl bg-[#fffaf5] p-4">
+                                            <p className="text-sm font-semibold text-slate-800">
+                                                Latest generated draft
+                                            </p>
 
-                                    <select
-                                        value={selectedParentId}
-                                        onChange={(e) => {
-                                            setSelectedParentId(e.target.value);
-                                            setGeneratedDraft("");
-                                            setEditingLetterId("");
-                                        }}
-                                        className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
-                                    >
-                                        {selectedFamily?.parents?.map((parent) => (
-                                            <option key={parent.id} value={parent.id}>
-                                                {parent.parent_name} ({parent.parent_phone})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
+                                            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                                {generatedDraft}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
-                                <label className="block">
-                                    <span className="text-sm font-medium text-slate-700">
-                                        Letter month
-                                    </span>
-
-                                    <input
-                                        type="month"
-                                        value={letterMonth}
-                                        onChange={(e) => setLetterMonth(e.target.value)}
-                                        className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-900"
-                                    />
-                                </label>
+                        <div className="rounded-3xl bg-white p-6 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <h2 className="text-xl font-semibold">
+                                        Monthly call-note tracking
+                                    </h2>
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        These are the notes that match the selected parent and
+                                        month. The letter generator uses notes from this same month.
+                                    </p>
+                                </div>
 
                                 <button
-                                    onClick={handleGenerateLetter}
-                                    disabled={generating}
-                                    className="w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    onClick={() => {
+                                        if (selectedParentId) {
+                                            loadMonthlyCallNotes(selectedParentId, letterMonth);
+                                        }
+                                    }}
+                                    className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
                                 >
-                                    {generating ? "Generating..." : "Generate monthly letter"}
+                                    Refresh
                                 </button>
-
-                                {generatedDraft && (
-                                    <div className="rounded-2xl bg-[#fffaf5] p-4">
-                                        <p className="text-sm font-semibold text-slate-800">
-                                            Latest generated draft
-                                        </p>
-
-                                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                            {generatedDraft}
-                                        </p>
-                                    </div>
-                                )}
                             </div>
-                        )}
+
+                            {loadingMonthlyNotes ? (
+                                <p className="mt-5 text-sm text-slate-600">
+                                    Loading monthly call notes...
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                        <TrackingMetric
+                                            label="Total notes"
+                                            value={monthlyStats.total}
+                                        />
+                                        <TrackingMetric
+                                            label="Reviewed"
+                                            value={monthlyStats.reviewed}
+                                        />
+                                        <TrackingMetric
+                                            label="Summarized"
+                                            value={monthlyStats.summarized}
+                                        />
+                                        <TrackingMetric
+                                            label="Unsummarized"
+                                            value={monthlyStats.unsummarized}
+                                        />
+                                        <TrackingMetric
+                                            label="Not reviewed"
+                                            value={monthlyStats.not_reviewed}
+                                        />
+                                        <TrackingMetric
+                                            label="Sensitive flagged"
+                                            value={monthlyStats.sensitive}
+                                        />
+                                    </div>
+
+                                    {monthlyStats.total === 0 && (
+                                        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                                            No call notes were found for this parent in{" "}
+                                            {formatMonthForDisplay(letterMonth)}. Check whether the
+                                            parent and month are correct.
+                                        </div>
+                                    )}
+
+                                    {monthlyStats.total > 0 && monthlyStats.unsummarized > 0 && (
+                                        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                                            Some notes do not have summaries yet. Go to Call notes,
+                                            generate summaries, and mark them reviewed before creating
+                                            the final letter.
+                                        </div>
+                                    )}
+
+                                    {monthlyStats.total > 0 && monthlyStats.not_reviewed > 0 && (
+                                        <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-800">
+                                            Some notes are not reviewed yet. You can still generate a
+                                            draft, but review is recommended before mailing.
+                                        </div>
+                                    )}
+
+                                    {monthlyCallNotes.length > 0 && (
+                                        <div className="mt-5 space-y-3">
+                                            {monthlyCallNotes.map((note) => (
+                                                <div
+                                                    key={note.id}
+                                                    className="rounded-2xl border border-slate-100 p-4"
+                                                >
+                                                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-slate-900">
+                                                                {note.call_date} · Week{" "}
+                                                                {note.call_week || "N/A"}
+                                                            </p>
+                                                            <p className="mt-1 text-sm text-slate-600">
+                                                                {note.call_theme || "No theme"}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {note.ai_summary ? (
+                                                                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                                                                    Summarized
+                                                                </span>
+                                                            ) : (
+                                                                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                                                                    No summary
+                                                                </span>
+                                                            )}
+
+                                                            {note.reviewed ? (
+                                                                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                                                                    Reviewed
+                                                                </span>
+                                                            ) : (
+                                                                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                                                                    Not reviewed
+                                                                </span>
+                                                            )}
+
+                                                            {note.memory_highlights ? (
+                                                                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                                                                    Highlights
+                                                                </span>
+                                                            ) : (
+                                                                <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                                                                    No highlights
+                                                                </span>
+                                                            )}
+
+                                                            {note.sensitive_flag && (
+                                                                <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+                                                                    Sensitive
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {note.ai_summary && (
+                                                        <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-700">
+                                                            {note.ai_summary}
+                                                        </p>
+                                                    )}
+
+                                                    {!note.ai_summary && note.raw_notes && (
+                                                        <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-500">
+                                                            {note.raw_notes}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </section>
 
                     <section className="rounded-3xl bg-white p-6 shadow-sm">
@@ -695,8 +938,32 @@ export default function AdminLettersPage() {
     );
 }
 
+function TrackingMetric({ label, value }: { label: string; value: number }) {
+    return (
+        <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {label}
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+        </div>
+    );
+}
+
 function formatText(value: string) {
     return value
         .replaceAll("_", " ")
         .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatMonthForDisplay(value: string) {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(`${value}-01T12:00:00`);
+
+    return date.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+    });
 }
