@@ -106,7 +106,10 @@ export default function AdminPage() {
             <div className="mx-auto max-w-6xl space-y-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <Link href="/" className="text-sm text-slate-600 hover:text-slate-900">
+                        <Link
+                            href="/"
+                            className="text-sm text-slate-600 hover:text-slate-900"
+                        >
                             ← Back to home
                         </Link>
 
@@ -115,7 +118,8 @@ export default function AdminPage() {
                         </h1>
 
                         <p className="mt-2 text-sm text-slate-600">
-                            Manage pilot families, calls, letters, summaries, and mailing workflow.
+                            Manage pilot families, calls, letters, summaries, and mailing
+                            workflow.
                         </p>
                     </div>
 
@@ -164,9 +168,9 @@ export default function AdminPage() {
                                     : "next",
                         },
                         {
-                            title: "3. Call and review",
+                            title: "3. Schedule and call",
                             description:
-                                "Start a guided call, summarize the call note, and mark it reviewed.",
+                                "Schedule a weekly call, start a guided call, and track whether it was completed or missed.",
                             status: families.some((family) =>
                                 family.parents?.some(
                                     (parent) => parent.consent_status === "consented"
@@ -176,9 +180,9 @@ export default function AdminPage() {
                                 : "next",
                         },
                         {
-                            title: "4. Deliver",
+                            title: "4. Review and deliver",
                             description:
-                                "Generate letter, print handwritten-style version, and send family summary.",
+                                "Summarize reviewed call notes, generate letters, print handwritten-style letters, and send family summaries.",
                             status: "next",
                         },
                     ]}
@@ -223,6 +227,12 @@ export default function AdminPage() {
                     <h2 className="text-xl font-semibold">Quick actions</h2>
 
                     <div className="mt-5 grid gap-3 md:grid-cols-3">
+                        <QuickAction
+                            href="/admin/schedule"
+                            title="Call schedule"
+                            description="Schedule upcoming weekly calls and track completed, missed, or skipped calls."
+                        />
+
                         <QuickAction
                             href="/admin/twilio"
                             title="Start guided call"

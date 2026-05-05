@@ -6,6 +6,7 @@ type AdminNavProps = {
 
 const navItems = [
     { label: "Dashboard", href: "/admin", key: "dashboard" },
+    { label: "Schedule", href: "/admin/schedule", key: "schedule" },
     { label: "Call notes", href: "/admin/calls", key: "calls" },
     { label: "Twilio calls", href: "/admin/twilio", key: "twilio" },
     { label: "Letters", href: "/admin/letters", key: "letters" },
