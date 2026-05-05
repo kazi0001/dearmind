@@ -48,7 +48,7 @@ DearMind`;
 
 I have been thinking about the moments you shared during ${month}. What stood out most was not only the information itself, but the warmth behind it: the ordinary details of daily life, the family connections that matter to you, and the memories that deserve to be preserved.
 
-This month’s conversations included the following themes:
+This month’s reviewed conversations included the following themes:
 
 ${notesText}
 
@@ -92,16 +92,16 @@ Reviewed: ${note.reviewed ? "Yes" : "No"}
     const prompt = `
 You are writing a DearMind monthly letter.
 
-DearMind turns weekly family-memory conversations into warm monthly letters.
+DearMind turns reviewed weekly family-memory conversations into warm monthly letters.
 The reader is the parent or older adult named ${parentName}.
 The month is ${month}.
 
 Important rules:
 - Write in a warm, respectful, personal tone.
 - Do not sound like a clinical report.
-- Do not mention AI, transcripts, databases, or call notes.
+- Do not mention AI, transcripts, databases, call notes, or review status.
 - Do not invent facts.
-- Use only details provided in the call notes.
+- Use only details provided in the reviewed call notes.
 - Avoid medical, financial, legal, political, or highly sensitive content.
 - If a sensitive topic appears, refer to it gently or omit it unless it is clearly appropriate.
 - Keep the letter around 300 to 450 words.
@@ -109,7 +109,7 @@ Important rules:
 - Include specific memories, family names, routines, foods, places, or small moments if provided.
 - End with a warm closing from DearMind.
 
-Call notes:
+Reviewed call notes:
 ${callNotesText}
 
 Return only the letter text. No JSON. No explanation.
@@ -232,7 +232,7 @@ export async function POST(request: Request) {
         }
 
         const monthStart = `${body.letter_month}-01`;
-        const selectedDate = new Date(monthStart);
+        const selectedDate = new Date(`${monthStart}T12:00:00`);
 
         const nextMonthDate = new Date(
             selectedDate.getFullYear(),
@@ -258,6 +258,7 @@ export async function POST(request: Request) {
       `
             )
             .eq("parent_id", body.parent_id)
+            .eq("reviewed", true)
             .gte("call_date", monthStart)
             .lt("call_date", nextMonth)
             .order("call_date", { ascending: true });
@@ -269,12 +270,27 @@ export async function POST(request: Request) {
             );
         }
 
+        const reviewedCallNotes = callNotes || [];
+
+        if (reviewedCallNotes.length === 0) {
+            return Response.json(
+                {
+                    ok: false,
+                    error:
+                        "No reviewed call notes found for this parent and month. Review at least one call note before generating a letter.",
+                    reviewed_call_notes_count: 0,
+                    call_notes_count: 0,
+                },
+                { status: 400 }
+            );
+        }
+
         const draftText =
             body.draft_text ||
             (await generateAiLetterDraft({
                 parentName: parentData.parent_name,
                 month: body.letter_month,
-                callNotes: callNotes || [],
+                callNotes: reviewedCallNotes,
             }));
 
         const { data: letterData, error: letterError } = await supabaseAdmin
@@ -303,9 +319,10 @@ export async function POST(request: Request) {
             ok: true,
             letter_id: letterData.id,
             draft_text: draftText,
-            call_notes_count: callNotes?.length || 0,
+            reviewed_call_notes_count: reviewedCallNotes.length,
+            call_notes_count: reviewedCallNotes.length,
             generation_mode: process.env.OPENAI_API_KEY ? "ai" : "fallback_template",
-            message: "Letter draft generated successfully.",
+            message: "Letter draft generated successfully from reviewed call notes.",
         });
     } catch (error) {
         console.error("DearMind letters POST error:", error);
@@ -396,6 +413,7 @@ export async function PATCH(request: Request) {
         );
     }
 }
+
 export async function DELETE(request: Request) {
     try {
         const authorized = await isAdminAuthorized();

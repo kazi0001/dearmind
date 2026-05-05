@@ -60,6 +60,7 @@ export default function AdminLettersPage() {
     const [monthlyCallNotes, setMonthlyCallNotes] = useState<MonthlyCallNote[]>(
         []
     );
+
     const [monthlyStats, setMonthlyStats] = useState<MonthlyCallNoteStats>({
         total: 0,
         reviewed: 0,
@@ -173,6 +174,7 @@ export default function AdminLettersPage() {
             }
 
             setMonthlyCallNotes(result.call_notes || []);
+
             setMonthlyStats(
                 result.stats || {
                     total: 0,
@@ -220,6 +222,13 @@ export default function AdminLettersPage() {
             return;
         }
 
+        if (monthlyStats.reviewed === 0) {
+            setErrorMessage(
+                "No reviewed call notes are available for this month. Review at least one call note before generating a letter."
+            );
+            return;
+        }
+
         setGenerating(true);
         setSuccessMessage("");
         setErrorMessage("");
@@ -244,8 +253,10 @@ export default function AdminLettersPage() {
             }
 
             setGeneratedDraft(result.draft_text || "");
+
             setSuccessMessage(
-                `Letter draft generated from ${result.call_notes_count} call note(s).`
+                `Letter draft generated from ${result.reviewed_call_notes_count ?? result.call_notes_count
+                } reviewed call note(s).`
             );
 
             await loadLetters(selectedParentId);
@@ -580,10 +591,14 @@ export default function AdminLettersPage() {
 
                                     <button
                                         onClick={handleGenerateLetter}
-                                        disabled={generating}
+                                        disabled={generating || monthlyStats.reviewed === 0}
                                         className="w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
-                                        {generating ? "Generating..." : "Generate monthly letter"}
+                                        {generating
+                                            ? "Generating..."
+                                            : monthlyStats.reviewed === 0
+                                                ? "Review call notes before generating"
+                                                : "Generate monthly letter"}
                                     </button>
 
                                     {generatedDraft && (
@@ -609,7 +624,8 @@ export default function AdminLettersPage() {
                                     </h2>
                                     <p className="mt-2 text-sm text-slate-600">
                                         These are the notes that match the selected parent and
-                                        month. The letter generator uses notes from this same month.
+                                        month. The letter generator uses only reviewed notes from
+                                        this month.
                                     </p>
                                 </div>
 
@@ -676,8 +692,16 @@ export default function AdminLettersPage() {
 
                                     {monthlyStats.total > 0 && monthlyStats.not_reviewed > 0 && (
                                         <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-800">
-                                            Some notes are not reviewed yet. You can still generate a
-                                            draft, but review is recommended before mailing.
+                                            Some notes are not reviewed yet. The letter generator will
+                                            ignore unreviewed notes and use only reviewed notes.
+                                        </div>
+                                    )}
+
+                                    {monthlyStats.total > 0 && monthlyStats.reviewed === 0 && (
+                                        <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800">
+                                            No reviewed call notes are available for this month.
+                                            Review at least one call note before generating the final
+                                            letter.
                                         </div>
                                     )}
 
@@ -739,13 +763,13 @@ export default function AdminLettersPage() {
                                                     </div>
 
                                                     {note.ai_summary && (
-                                                        <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-700">
+                                                        <p className="mt-3 text-sm leading-6 text-slate-700">
                                                             {note.ai_summary}
                                                         </p>
                                                     )}
 
                                                     {!note.ai_summary && note.raw_notes && (
-                                                        <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-500">
+                                                        <p className="mt-3 text-sm leading-6 text-slate-500">
                                                             {note.raw_notes}
                                                         </p>
                                                     )}
