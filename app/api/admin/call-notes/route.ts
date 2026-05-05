@@ -130,3 +130,85 @@ export async function POST(request: Request) {
         );
     }
 }
+
+export async function PATCH(request: Request) {
+    try {
+        const authorized = await isAdminAuthorized();
+
+        if (!authorized) {
+            return Response.json(
+                { ok: false, error: "Unauthorized." },
+                { status: 401 }
+            );
+        }
+
+        const body = await request.json();
+
+        if (!body.call_note_id) {
+            return Response.json(
+                { ok: false, error: "call_note_id is required." },
+                { status: 400 }
+            );
+        }
+
+        const updatePayload: Record<string, any> = {};
+
+        if (typeof body.ai_summary === "string") {
+            updatePayload.ai_summary = body.ai_summary;
+        }
+
+        if (typeof body.memory_highlights === "string") {
+            updatePayload.memory_highlights = body.memory_highlights;
+        }
+
+        if (typeof body.sensitive_flag === "boolean") {
+            updatePayload.sensitive_flag = body.sensitive_flag;
+        }
+
+        if (typeof body.reviewed === "boolean") {
+            updatePayload.reviewed = body.reviewed;
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from("call_notes")
+            .update(updatePayload)
+            .eq("id", body.call_note_id)
+            .select(
+                `
+        id,
+        family_id,
+        parent_id,
+        call_date,
+        call_week,
+        call_theme,
+        raw_notes,
+        ai_summary,
+        memory_highlights,
+        sensitive_flag,
+        reviewed,
+        created_at
+      `
+            )
+            .single();
+
+        if (error) {
+            return Response.json(
+                { ok: false, error: error.message },
+                { status: 500 }
+            );
+        }
+
+        return Response.json({
+            ok: true,
+            call_note: data,
+            message: "Call note updated successfully.",
+        });
+    } catch (error) {
+        console.error("DearMind call notes PATCH error:", error);
+
+        return Response.json(
+            { ok: false, error: "Unexpected server error while updating call note." },
+            { status: 500 }
+        );
+    }
+}

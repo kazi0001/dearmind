@@ -226,6 +226,107 @@ export default function AdminCallsPage() {
         }
     }
 
+    async function summarizeExistingCallNote(note: CallNote) {
+        if (!note.raw_notes?.trim()) {
+            setErrorMessage("This call note does not have raw notes to summarize.");
+            return;
+        }
+
+        setSaving(true);
+        setSuccessMessage("");
+        setErrorMessage("");
+
+        try {
+            const summaryResponse = await fetch("/api/admin/summarize-call", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    raw_notes: note.raw_notes,
+                }),
+            });
+
+            const summaryResult = await summaryResponse.json();
+
+            if (!summaryResponse.ok || !summaryResult.ok) {
+                throw new Error(summaryResult.error || "Failed to generate summary.");
+            }
+
+            const updateResponse = await fetch("/api/admin/call-notes", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    call_note_id: note.id,
+                    ai_summary: summaryResult.ai_summary || "",
+                    memory_highlights: summaryResult.memory_highlights || "",
+                    sensitive_flag: Boolean(summaryResult.sensitive_flag),
+                    reviewed: false,
+                }),
+            });
+
+            const updateResult = await updateResponse.json();
+
+            if (!updateResponse.ok || !updateResult.ok) {
+                throw new Error(updateResult.error || "Failed to update call note.");
+            }
+
+            setSuccessMessage(
+                summaryResult.sensitive_flag
+                    ? `Summary generated. Sensitive topic flagged: ${summaryResult.sensitive_reason || "Needs review."
+                    }`
+                    : "Summary and memory highlights generated for the existing call note."
+            );
+
+            if (selectedParentId) {
+                await loadCallNotes(selectedParentId);
+            }
+        } catch (error) {
+            console.error("DearMind summarize existing call note error:", error);
+            setErrorMessage("Could not summarize this existing call note.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function markExistingCallNoteReviewed(note: CallNote) {
+        setSaving(true);
+        setSuccessMessage("");
+        setErrorMessage("");
+
+        try {
+            const response = await fetch("/api/admin/call-notes", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    call_note_id: note.id,
+                    reviewed: true,
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || "Failed to mark note reviewed.");
+            }
+
+            setSuccessMessage("Call note marked as reviewed.");
+
+            if (selectedParentId) {
+                await loadCallNotes(selectedParentId);
+            }
+        } catch (error) {
+            console.error("DearMind mark call note reviewed error:", error);
+            setErrorMessage("Could not mark call note as reviewed.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
@@ -305,6 +406,13 @@ export default function AdminCallsPage() {
                             className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
                         >
                             Letters
+                        </Link>
+
+                        <Link
+                            href="/admin/twilio"
+                            className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
+                        >
+                            Twilio calls
                         </Link>
 
                         <button
@@ -607,6 +715,26 @@ export default function AdminCallsPage() {
                                                 </p>
                                             </div>
                                         )}
+
+                                        <div className="mt-5 flex flex-wrap gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => summarizeExistingCallNote(note)}
+                                                disabled={saving || !note.raw_notes?.trim()}
+                                                className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                Generate summary
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => markExistingCallNoteReviewed(note)}
+                                                disabled={saving || note.reviewed}
+                                                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                {note.reviewed ? "Reviewed" : "Mark reviewed"}
+                                            </button>
+                                        </div>
                                     </article>
                                 ))}
                             </div>
