@@ -6,7 +6,13 @@ async function isAdminAuthorized() {
     return cookieStore.get("dearmind_admin")?.value === "authorized";
 }
 
-const allowedStatuses = ["scheduled", "completed", "missed", "skipped"];
+const allowedStatuses = [
+    "scheduled",
+    "in_progress",
+    "completed",
+    "missed",
+    "skipped",
+];
 
 export async function GET(request: Request) {
     try {

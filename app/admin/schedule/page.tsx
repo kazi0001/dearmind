@@ -93,6 +93,10 @@ export default function AdminSchedulePage() {
         (call) => call.scheduled_date > today && call.status === "scheduled"
     );
 
+    const inProgressCalls = scheduledCalls.filter(
+        (call) => call.status === "in_progress"
+    );
+
     const missedCalls = scheduledCalls.filter((call) => call.status === "missed");
 
     async function loadFamilies() {
@@ -161,7 +165,9 @@ export default function AdminSchedulePage() {
     }
 
     function updateField(
-        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+        e: React.ChangeEvent<
+            HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >
     ) {
         const { name, value } = e.target;
 
@@ -231,10 +237,68 @@ export default function AdminSchedulePage() {
         }
     }
 
-    async function updateScheduledCallStatus(
-        scheduleId: string,
-        status: string
-    ) {
+    async function startScheduledCall(call: ScheduledCall) {
+        if (!call.family_id || !call.parent_id) {
+            setErrorMessage("Missing family or parent for this scheduled call.");
+            return;
+        }
+
+        if (!call.parents?.parent_phone) {
+            setErrorMessage("Selected parent does not have a phone number.");
+            return;
+        }
+
+        if (call.parents?.consent_status !== "consented") {
+            setErrorMessage(
+                "This parent has not consented yet. Update consent status to Consented before starting the call."
+            );
+            return;
+        }
+
+        setSaving(true);
+        setSuccessMessage("");
+        setErrorMessage("");
+
+        try {
+            const response = await fetch("/api/admin/twilio/call", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    schedule_id: call.id,
+                    family_id: call.family_id,
+                    parent_id: call.parent_id,
+                    parent_phone: call.parents.parent_phone,
+                    call_week: call.call_week || 1,
+                    call_theme:
+                        call.call_theme || getDefaultThemeForWeek(call.call_week || 1),
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.ok) {
+                throw new Error(result.error || "Failed to start scheduled call.");
+            }
+
+            setSuccessMessage(
+                `Scheduled call started successfully. Twilio SID: ${result.call_sid}`
+            );
+
+            await loadSchedule();
+        } catch (error: any) {
+            console.error("DearMind start scheduled call error:", error);
+            setErrorMessage(
+                error?.message ||
+                "Could not start scheduled call. Check Twilio settings and phone number."
+            );
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function updateScheduledCallStatus(scheduleId: string, status: string) {
         setSaving(true);
         setSuccessMessage("");
         setErrorMessage("");
@@ -312,7 +376,10 @@ export default function AdminSchedulePage() {
             <div className="mx-auto max-w-6xl space-y-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
-                        <Link href="/admin" className="text-sm text-slate-600 hover:text-slate-900">
+                        <Link
+                            href="/admin"
+                            className="text-sm text-slate-600 hover:text-slate-900"
+                        >
                             ← Back to admin
                         </Link>
 
@@ -347,9 +414,10 @@ export default function AdminSchedulePage() {
                     </div>
                 )}
 
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-5">
                     <MetricCard label="Today" value={todaysCalls.length} />
                     <MetricCard label="Upcoming" value={upcomingCalls.length} />
+                    <MetricCard label="In progress" value={inProgressCalls.length} />
                     <MetricCard
                         label="Scheduled"
                         value={
@@ -528,7 +596,8 @@ export default function AdminSchedulePage() {
                             <div>
                                 <h2 className="text-xl font-semibold">Scheduled calls</h2>
                                 <p className="mt-2 text-sm text-slate-600">
-                                    Track weekly call status and update outcomes.
+                                    Track weekly call status and start guided calls from the
+                                    schedule.
                                 </p>
                             </div>
 
@@ -539,6 +608,7 @@ export default function AdminSchedulePage() {
                             >
                                 <option value="all">All statuses</option>
                                 <option value="scheduled">Scheduled</option>
+                                <option value="in_progress">In progress</option>
                                 <option value="completed">Completed</option>
                                 <option value="missed">Missed</option>
                                 <option value="skipped">Skipped</option>
@@ -583,6 +653,13 @@ export default function AdminSchedulePage() {
                                                 <p className="mt-1 text-sm text-slate-500">
                                                     Buyer: {call.families?.buyer_name || "Unknown"}
                                                 </p>
+
+                                                <p className="mt-1 text-sm text-slate-500">
+                                                    Consent:{" "}
+                                                    {formatText(
+                                                        call.parents?.consent_status || "pending"
+                                                    )}
+                                                </p>
                                             </div>
 
                                             <StatusBadge label={formatText(call.status || "scheduled")} />
@@ -601,11 +678,29 @@ export default function AdminSchedulePage() {
 
                                         <div className="mt-5 flex flex-wrap gap-3">
                                             <button
+                                                onClick={() => startScheduledCall(call)}
+                                                disabled={
+                                                    saving ||
+                                                    call.status === "completed" ||
+                                                    call.status === "missed" ||
+                                                    call.status === "skipped" ||
+                                                    call.parents?.consent_status !== "consented"
+                                                }
+                                                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                {call.parents?.consent_status !== "consented"
+                                                    ? "Consent required"
+                                                    : call.status === "in_progress"
+                                                        ? "Call in progress"
+                                                        : "Start call"}
+                                            </button>
+
+                                            <button
                                                 onClick={() =>
                                                     updateScheduledCallStatus(call.id, "completed")
                                                 }
                                                 disabled={saving}
-                                                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                                className="rounded-2xl border border-green-200 bg-green-50 px-5 py-3 text-sm font-medium text-green-700 shadow-sm hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
                                             >
                                                 Mark completed
                                             </button>
@@ -659,11 +754,32 @@ function MetricCard({ label, value }: { label: string; value: number }) {
 }
 
 function StatusBadge({ label }: { label: string }) {
-    return (
-        <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-medium text-amber-700">
-            {label}
-        </span>
-    );
+    const normalized = label.toLowerCase().replaceAll(" ", "_");
+
+    let className =
+        "rounded-full bg-amber-50 px-4 py-2 text-xs font-medium text-amber-700";
+
+    if (normalized === "completed") {
+        className =
+            "rounded-full bg-green-50 px-4 py-2 text-xs font-medium text-green-700";
+    }
+
+    if (normalized === "in_progress") {
+        className =
+            "rounded-full bg-blue-50 px-4 py-2 text-xs font-medium text-blue-700";
+    }
+
+    if (normalized === "missed") {
+        className =
+            "rounded-full bg-red-50 px-4 py-2 text-xs font-medium text-red-700";
+    }
+
+    if (normalized === "skipped") {
+        className =
+            "rounded-full bg-slate-100 px-4 py-2 text-xs font-medium text-slate-700";
+    }
+
+    return <span className={className}>{label}</span>;
 }
 
 function formatText(value: string) {

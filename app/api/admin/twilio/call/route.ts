@@ -48,8 +48,7 @@ export async function POST(request: Request) {
         }
 
         const callWeek = body.call_week ? Number(body.call_week) : 1;
-        const callTheme =
-            body.call_theme || getDefaultThemeForWeek(callWeek);
+        const callTheme = body.call_theme || getDefaultThemeForWeek(callWeek);
 
         const { data: session, error: sessionError } = await supabaseAdmin
             .from("voice_call_sessions")
@@ -67,7 +66,8 @@ export async function POST(request: Request) {
             return Response.json(
                 {
                     ok: false,
-                    error: sessionError?.message || "Could not create voice call session.",
+                    error:
+                        sessionError?.message || "Could not create voice call session.",
                 },
                 { status: 500 }
             );
@@ -101,13 +101,30 @@ export async function POST(request: Request) {
             })
             .eq("id", session.id);
 
+        if (body.schedule_id) {
+            await supabaseAdmin
+                .from("call_schedule")
+                .update({
+                    status: "in_progress",
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", body.schedule_id);
+        }
+
         await supabaseAdmin.from("call_notes").insert({
             family_id: body.family_id,
             parent_id: body.parent_id,
             call_date: new Date().toISOString().slice(0, 10),
             call_week: callWeek,
             call_theme: callTheme,
-            raw_notes: `Automated DearMind guided call initiated. Twilio Call SID: ${call.sid}. Voice session ID: ${session.id}`,
+            raw_notes: [
+                "Automated DearMind guided call initiated.",
+                `Twilio Call SID: ${call.sid}.`,
+                `Voice session ID: ${session.id}.`,
+                body.schedule_id ? `Schedule ID: ${body.schedule_id}.` : "",
+            ]
+                .filter(Boolean)
+                .join("\n"),
             ai_summary: null,
             memory_highlights: null,
             sensitive_flag: false,
@@ -118,6 +135,7 @@ export async function POST(request: Request) {
             ok: true,
             call_sid: call.sid,
             session_id: session.id,
+            schedule_id: body.schedule_id || null,
             message: "Automated guided DearMind call started.",
         });
     } catch (error: any) {
