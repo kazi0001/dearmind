@@ -1,7 +1,12 @@
 import twilio from "twilio";
+import OpenAI from "openai";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(request: Request) {
     const url = new URL(request.url);
@@ -148,18 +153,28 @@ async function finalizeCallSession({
         .filter(Boolean)
         .join("\n");
 
-    await supabaseAdmin.from("call_notes").insert({
-        family_id: familyId,
-        parent_id: parentId,
-        call_date: new Date().toISOString().slice(0, 10),
-        call_week: callWeek,
-        call_theme: callTheme,
-        raw_notes: rawNotes,
-        ai_summary: null,
-        memory_highlights: null,
-        sensitive_flag: false,
-        reviewed: false,
-    });
+    const generatedSummary = await generateCallSummary(rawNotes);
+
+    const { data: callNote, error: callNoteError } = await supabaseAdmin
+        .from("call_notes")
+        .insert({
+            family_id: familyId,
+            parent_id: parentId,
+            call_date: new Date().toISOString().slice(0, 10),
+            call_week: callWeek,
+            call_theme: callTheme,
+            raw_notes: rawNotes,
+            ai_summary: generatedSummary.ai_summary,
+            memory_highlights: generatedSummary.memory_highlights,
+            sensitive_flag: generatedSummary.sensitive_flag,
+            reviewed: false,
+        })
+        .select("id")
+        .single();
+
+    if (callNoteError) {
+        console.error("DearMind could not create completed call note:", callNoteError);
+    }
 
     await supabaseAdmin
         .from("voice_call_sessions")
@@ -177,6 +192,84 @@ async function finalizeCallSession({
                 updated_at: new Date().toISOString(),
             })
             .eq("id", scheduleId);
+    }
+
+    if (callNote?.id) {
+        console.log("DearMind completed call note created:", callNote.id);
+    }
+}
+
+async function generateCallSummary(rawNotes: string) {
+    const fallback = {
+        ai_summary:
+            "This automated guided call was completed and saved for human review. The parent answered the guided memory questions, and the responses should be reviewed before generating a monthly letter.",
+        memory_highlights:
+            "Do not forget: Review the completed guided call responses before using them in a letter.",
+        sensitive_flag: false,
+    };
+
+    if (!process.env.OPENAI_API_KEY) {
+        return fallback;
+    }
+
+    try {
+        const prompt = `
+You are helping DearMind summarize a guided family-memory call.
+
+DearMind is a family memory and connection service. It is not a medical, emergency, legal, financial, political, or therapy service.
+
+Your task:
+Return ONLY valid JSON with this exact structure:
+{
+  "ai_summary": "A warm, factual 4-6 sentence summary of the call.",
+  "memory_highlights": "3-5 short bullet-style memory highlights, each starting with 'Do not forget:'",
+  "sensitive_flag": false,
+  "sensitive_reason": "Brief reason, or empty string if none."
+}
+
+Rules:
+- Use only the information in the raw call notes.
+- Do not invent details.
+- Avoid medical, financial, legal, political, religious, or highly private details.
+- If sensitive content appears, set sensitive_flag to true.
+- Keep the tone warm, respectful, and factual.
+- Write for internal DearMind review, not directly to the family.
+
+Raw call notes:
+${rawNotes}
+`;
+
+        const response = await openai.responses.create({
+            model: "gpt-4o-mini",
+            input: prompt,
+            temperature: 0.3,
+        });
+
+        const outputText = response.output_text || "";
+
+        let parsed;
+
+        try {
+            parsed = JSON.parse(outputText);
+        } catch {
+            const cleaned = outputText
+                .replace(/^```json/i, "")
+                .replace(/^```/i, "")
+                .replace(/```$/i, "")
+                .trim();
+
+            parsed = JSON.parse(cleaned);
+        }
+
+        return {
+            ai_summary: parsed.ai_summary || fallback.ai_summary,
+            memory_highlights:
+                parsed.memory_highlights || fallback.memory_highlights,
+            sensitive_flag: Boolean(parsed.sensitive_flag),
+        };
+    } catch (error) {
+        console.error("DearMind auto summary generation failed:", error);
+        return fallback;
     }
 }
 
